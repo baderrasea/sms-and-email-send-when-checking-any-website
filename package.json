@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "@playwright/test": "^1.51.1",
+    "axios": "^1.8.4",
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
+    "nodemailer": "^6.10.0",
+    "selenium-webdriver": "^4.29.0",
+    "twilio": "^5.5.1"
+  },
+  "name": "codes",
+  "version": "1.0.0",
+  "main": "firefoxMonitor.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
