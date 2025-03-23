@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { firefox } = require('@playwright/test');
+const { chromium } = require('@playwright/test'); // Using Chromium instead of Firefox
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +15,7 @@ const defaultPhrases = [
   "Le server est occupé",
   "El servidor está saturado",
   "Сервер перегружен",
-  "El servidor está ocupado"
+  "El servidor está ocupado",
 ];
 
 // Reads stored phrases from file or returns default if file doesn't exist.
@@ -44,8 +44,7 @@ function storePhrases(phrases) {
 }
 
 // --- Monitor Configuration ---
-
-const url = 'https://qafelh.com/'; // URL to monitor
+const url = 'https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?locationCode=mask&realmId=354&categoryId=1638&dateStr=09.02.2025'; // URL to monitor
 let phrasesToFind = getStoredPhrases();
 let lastStatus = null; // 'found' or 'not_found'
 
@@ -109,7 +108,8 @@ function makePhoneCall(messageText) {
 
 // --- Monitor Function ---
 async function checkWebsite() {
-  const browser = await firefox.launch({ headless: true });
+  // Launch Chromium (lighter alternative to Firefox)
+  const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
   try {
@@ -220,5 +220,6 @@ app.post('/update', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Configuration server is running on http://localhost:${PORT}`);
+  const appUrl = `http://localhost:${PORT}`;
+  console.log(`Configuration server is running on ${appUrl}`);
 });
