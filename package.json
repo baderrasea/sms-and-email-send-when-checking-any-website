@@ -13,7 +13,7 @@
   "main": "app.js",
 "scripts": {
   "postinstall": "npx playwright install --with-deps",
-  "start": "node app.js",
+  "start": "node app.js"
 },
 
   "keywords": [],
