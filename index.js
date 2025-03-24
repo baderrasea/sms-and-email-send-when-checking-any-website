@@ -46,7 +46,8 @@ function storePhrases(phrases) {
 // --- Monitor Configuration ---
 const url = 'https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?locationCode=mask&realmId=354&categoryId=1638&dateStr=09.02.2025'; // URL to monitor
 let phrasesToFind = getStoredPhrases();
-let lastStatus = null; // 'found' or 'not_found'
+// lastStatus can be: 'found', 'not_found', or 'server_down'
+let lastStatus = null;
 
 // Configure your email transporter (using Gmail as an example)
 const transporter = nodemailer.createTransport({
@@ -65,10 +66,11 @@ const twilioPhoneNumber = '+19785107097'; // Your Twilio phone number
 const yourPhoneNumber = '+967778956556';  // Your mobile number in E.164 format
 
 // Sends email notifications (Arabic message)
+// Sends to both kidsundkinder@gmail.com and baderrasaa8@gmail.com.
 function sendEmail(subject, message) {
   const mailOptions = {
     from: 'baderrasaa8@gmail.com',
-    to: 'kidsundkinder@gmail.com',
+    to: 'kidsundkinder@gmail.com, baderrasaa8@gmail.com',
     subject,
     text: message,
   };
@@ -94,7 +96,7 @@ function sendSMS(messageText) {
     .catch(error => console.error('Error sending SMS:', error));
 }
 
-// Makes a phone call via Twilio (only when no phrase is found)
+// Makes a phone call via Twilio (only when no phrase is found or on error)
 function makePhoneCall(messageText) {
   client.calls
     .create({
@@ -114,11 +116,20 @@ async function checkWebsite() {
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
+  const timeStamp = new Date().toLocaleString();
 
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const content = await page.content();
-    const timeStamp = new Date().toLocaleString();
+
+    // If the server was previously down, notify that it's up again.
+    if (lastStatus === 'server_down') {
+      const upMessage = `تنبيه: عاد الخادم للعمل في ${timeStamp}.`;
+      sendEmail('تنبيه: الخادم عاد للعمل', upMessage);
+      sendSMS(upMessage);
+      // Reset lastStatus so that subsequent notifications follow normal logic.
+      lastStatus = null;
+    }
 
     // Find which phrases are present in the content
     const foundPhrases = phrasesToFind.filter(phrase => content.includes(phrase));
@@ -127,7 +138,6 @@ async function checkWebsite() {
       console.log(`Found phrases at ${timeStamp}.`);
       if (lastStatus !== 'found') {
         const alertMessage = `تنبيه: تم العثور على العبارات التالية في الموقع في ${timeStamp}: ${foundPhrases.join(', ')}`;
-        // Email and SMS messages in Arabic
         sendEmail('تنبيه العثور على العبارات', alertMessage);
         sendSMS(alertMessage);
         lastStatus = 'found';
@@ -144,6 +154,12 @@ async function checkWebsite() {
     }
   } catch (error) {
     console.error('Error loading the page:', error.message);
+    // Always notify when there's an error, regardless of the previous state.
+    const alertMessage = `تنويه: الخادم معطل في ${timeStamp}. خطأ: ${error.message}`;
+    sendEmail('تنبيه: الخادم معطل', alertMessage);
+    sendSMS(alertMessage);
+    makePhoneCall(alertMessage);
+    lastStatus = 'server_down';
   }
 
   await browser.close();
@@ -191,7 +207,7 @@ app.get('/', (req, res) => {
             <form method="POST" action="/update">
               <div class="mb-3">
                 <label for="phrases" class="form-label">أدخل العبارات الجديدة (كل عبارة في سطر):</label>
-                <textarea class="form-control" id="phrases" name="phrases" rows="8" required>${phrasesText}</textarea>
+                <textarea class="form-control" id="phrases" name="phrases" rows="8" required>${phrasesToFind.join('\n')}</textarea>
               </div>
               <button type="submit" class="btn btn-primary w-100">تحديث العبارات</button>
             </form>
