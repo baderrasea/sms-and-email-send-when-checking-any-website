@@ -115,10 +115,10 @@ async function checkWebsite() {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
-  const page = await browser.newPage();
-  const timeStamp = new Date().toLocaleString();
-
   try {
+    const page = await browser.newPage();
+    const timeStamp = new Date().toLocaleString();
+
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const content = await page.content();
     lastFullResponse = content; // Save full response for display
@@ -153,6 +153,7 @@ async function checkWebsite() {
       }
     }
   } catch (error) {
+    const timeStamp = new Date().toLocaleString();
     console.error('Error loading the page:', error.message);
     lastFullResponse = `Error loading the page: ${error.message}`;
     // Always notify when there's an error.
@@ -161,14 +162,17 @@ async function checkWebsite() {
     sendSMS(alertMessage);
     makePhoneCall(alertMessage);
     lastStatus = 'server_down';
+  } finally {
+    await browser.close();
   }
-
-  await browser.close();
 }
 
-// Check the website immediately and then every 30 seconds.
-checkWebsite();
-setInterval(checkWebsite, 30 * 1000);
+// Replace setInterval with a polling loop to prevent overlapping executions.
+async function pollWebsite() {
+  await checkWebsite();
+  setTimeout(pollWebsite, 30000);
+}
+pollWebsite();
 
 // --- Express Server for Updating the Phrases and Showing Full Response ---
 const app = express();
