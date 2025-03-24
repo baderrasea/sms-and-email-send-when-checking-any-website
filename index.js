@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { chromium } = require('@playwright/test'); // Using Chromium instead of Firefox
+const { firefox } = require('@playwright/test'); // Using Firefox instead of Chromium
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
@@ -48,6 +48,7 @@ const url = 'https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?
 let phrasesToFind = getStoredPhrases();
 // lastStatus can be: 'found', 'not_found', or 'server_down'
 let lastStatus = null;
+let lastFullResponse = "No response fetched yet.";
 
 // Configure your email transporter (using Gmail as an example)
 const transporter = nodemailer.createTransport({
@@ -110,8 +111,7 @@ function makePhoneCall(messageText) {
 
 // --- Monitor Function ---
 async function checkWebsite() {
-  // Launch Chromium (lighter alternative to Firefox)
-  const browser = await chromium.launch({
+  const browser = await firefox.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
@@ -121,17 +121,17 @@ async function checkWebsite() {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const content = await page.content();
+    lastFullResponse = content; // Save full response for display
 
     // If the server was previously down, notify that it's up again.
     if (lastStatus === 'server_down') {
       const upMessage = `تنبيه: عاد الخادم للعمل في ${timeStamp}.`;
       sendEmail('تنبيه: الخادم عاد للعمل', upMessage);
       sendSMS(upMessage);
-      // Reset lastStatus so that subsequent notifications follow normal logic.
       lastStatus = null;
     }
 
-    // Find which phrases are present in the content
+    // Find which phrases are present in the content.
     const foundPhrases = phrasesToFind.filter(phrase => content.includes(phrase));
 
     if (foundPhrases.length > 0) {
@@ -154,7 +154,8 @@ async function checkWebsite() {
     }
   } catch (error) {
     console.error('Error loading the page:', error.message);
-    // Always notify when there's an error, regardless of the previous state.
+    lastFullResponse = `Error loading the page: ${error.message}`;
+    // Always notify when there's an error.
     const alertMessage = `تنويه: الخادم معطل في ${timeStamp}. خطأ: ${error.message}`;
     sendEmail('تنبيه: الخادم معطل', alertMessage);
     sendSMS(alertMessage);
@@ -165,11 +166,11 @@ async function checkWebsite() {
   await browser.close();
 }
 
-// Check the website immediately and then every 30 seconds
+// Check the website immediately and then every 30 seconds.
 checkWebsite();
 setInterval(checkWebsite, 30 * 1000);
 
-// --- Express Server for Updating the Phrases ---
+// --- Express Server for Updating the Phrases and Showing Full Response ---
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -184,33 +185,32 @@ app.get('/', (req, res) => {
       <title>إعداد مراقبة الموقع</title>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
       <style>
-        body {
-          background-color: #f8f9fa;
-          padding-top: 50px;
-        }
-        .container {
-          max-width: 600px;
-        }
-        .card {
-          margin-top: 20px;
-        }
+        body { background-color: #f8f9fa; padding-top: 50px; }
+        .container { max-width: 800px; }
+        .card { margin-top: 20px; }
+        pre { background: #eee; padding: 15px; white-space: pre-wrap; word-wrap: break-word; }
       </style>
     </head>
     <body>
       <div class="container">
         <h1 class="text-center">إعداد مراقبة الموقع</h1>
-        <div class="card">
+        <div class="card mb-3">
           <div class="card-body">
-            <p class="card-text">
-              <strong>العبارات الحالية:</strong>
-            </p>
+            <p class="card-text"><strong>العبارات الحالية:</strong></p>
+            <pre>${phrasesText}</pre>
             <form method="POST" action="/update">
               <div class="mb-3">
                 <label for="phrases" class="form-label">أدخل العبارات الجديدة (كل عبارة في سطر):</label>
-                <textarea class="form-control" id="phrases" name="phrases" rows="8" required>${phrasesToFind.join('\n')}</textarea>
+                <textarea class="form-control" id="phrases" name="phrases" rows="8" required>${phrasesText}</textarea>
               </div>
               <button type="submit" class="btn btn-primary w-100">تحديث العبارات</button>
             </form>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">المحتوى الكامل المستلم من الموقع:</h5>
+            <pre>${lastFullResponse}</pre>
           </div>
         </div>
       </div>
