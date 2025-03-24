@@ -2,148 +2,206 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { firefox } = require('@playwright/test');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
+
+// --- Persistent Storage Setup ---
+const storageFilePath = path.join(__dirname, 'searchPhrases.json');
+const defaultPhrases = [
+  "Der Server ist ausgelastet",
+  "The server is currently busy",
+  "Le server est occupé",
+  "El servidor está saturado",
+  "Сервер перегружен",
+  "El servidor está ocupado",
+];
+
+function getStoredPhrases() {
+  try {
+    if (fs.existsSync(storageFilePath)) {
+      const data = fs.readFileSync(storageFilePath, 'utf8');
+      const json = JSON.parse(data);
+      return Array.isArray(json.phrases) && json.phrases.length > 0 ? json.phrases : defaultPhrases;
+    }
+  } catch (err) {
+    console.error('Error reading storage file:', err);
+  }
+  return defaultPhrases;
+}
+
+function storePhrases(phrases) {
+  const data = { phrases };
+  fs.writeFileSync(storageFilePath, JSON.stringify(data, null, 2));
+  console.log('Phrases saved to storage.');
+}
 
 // --- Monitor Configuration ---
+const url = 'https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?locationCode=mask&realmId=354&categoryId=1638&dateStr=09.02.2025';
+let phrasesToFind = getStoredPhrases();
+let lastStatus = null;
+let lastFullResponse = "No response fetched yet.";
+let isChecking = false; // Prevent overlapping checks
 
-// URL to monitor
-const url = 'https://qafelh.com/';
-// Use a variable so that it can be updated via the web interface.
-let wordToFind = 'قفلة '; // Default search word/phrase
-let lastStatus = null; // Possible values: 'found' or 'not_found'
-
-// Configure your email transporter (using Gmail as an example)
+// Email and Twilio Configuration
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'badraldeenrasea@gmail.com',      // Replace with your email address
-    pass: 'lenp ozew pevq cmey',             // Replace with your email password or app-specific password
+    user: 'badraldeenrasea@gmail.com',
+    pass: 'lenp ozew pevq cmey',
   },
 });
 
-// Function to send email notifications
+const accountSid = 'ACe49c9576b39f7bed379e3df12948bbd2';
+const authToken = '0e8143121cd6e97d6ee8513279afe613';
+const client = require('twilio')(accountSid, authToken);
+const twilioPhoneNumber = '+19785107097';
+const yourPhoneNumber = '+967778956556';
+
 function sendEmail(subject, message) {
   const mailOptions = {
-    from: 'baderrasaa8@gmail.com',           // Sender address
-    to: 'baderrasaa8@gmail.com',             // Recipient address (can be the same as sender)
+    from: 'baderrasaa8@gmail.com',
+    to: 'kidsundkinder@gmail.com, baderrasaa8@gmail.com',
     subject,
     text: message,
   };
 
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error('Error sending email:', error);
-    } else {
-      console.log('Email sent:', info.response);
-    }
+  transporter.sendMail(mailOptions, (error) => {
+    if (error) console.error('Error sending email:', error);
+    else console.log('Email sent');
   });
 }
 
-// --- Monitor Function ---
+function sendSMS(messageText) {
+  client.messages
+    .create({
+      body: messageText,
+      from: twilioPhoneNumber,
+      to: yourPhoneNumber,
+    })
+    .catch(error => console.error('Error sending SMS:', error));
+}
+
+function makePhoneCall(messageText) {
+  client.calls
+    .create({
+      twiml: `<Response><Say voice="alice">${messageText}</Say></Response>`,
+      to: yourPhoneNumber,
+      from: twilioPhoneNumber,
+    })
+    .catch(error => console.error('Error initiating call:', error));
+}
+
+// --- Monitor Function with Improved Error Handling ---
 async function checkWebsite() {
-  const browser = await firefox.launch({ headless: true });
-  const page = await browser.newPage();
+  if (isChecking) {
+    console.log('Skipping check: Previous check still in progress');
+    return;
+  }
+  isChecking = true;
 
+  let browser;
   try {
-    // Navigate to the URL with an increased timeout (30 seconds)
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const content = await page.content();
+    browser = await firefox.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    const timeStamp = new Date().toLocaleString();
 
-    // Check if the specified word exists in the page content
-    if (content.includes(wordToFind)) {
-      console.log(`Found the word "${wordToFind}" at ${new Date().toLocaleString()}.`);
-      // If the status has changed, send an alert email
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    const content = await page.content();
+    lastFullResponse = content;
+
+    if (lastStatus === 'server_down') {
+      const upMessage = `تنبيه: عاد الخادم للعمل في ${timeStamp}.`;
+      sendEmail('تنبيه: الخادم عاد للعمل', upMessage);
+      sendSMS(upMessage);
+    }
+
+    const foundPhrases = phrasesToFind.filter(phrase => content.includes(phrase));
+    if (foundPhrases.length > 0) {
+      console.log(`Found phrases at ${timeStamp}`);
       if (lastStatus !== 'found') {
-        sendEmail(
-          'Word Found Alert',
-          `The word "${wordToFind}" was found on the website at ${new Date().toLocaleString()}.`
-        );
+        const alertMessage = `تنبيه: تم العثور على العبارات في ${timeStamp}: ${foundPhrases.join(', ')}`;
+        sendEmail('تنبيه العثور على العبارات', alertMessage);
+        sendSMS(alertMessage);
         lastStatus = 'found';
       }
     } else {
-      console.log(`Word "${wordToFind}" not found at ${new Date().toLocaleString()}.`);
-      // If the status has changed, send a "not found" email
+      console.log(`No phrases found at ${timeStamp}`);
       if (lastStatus !== 'not_found') {
-        sendEmail(
-          'Word Not Found Alert',
-          `The word "${wordToFind}" is not found on the website at ${new Date().toLocaleString()}. The website is live again.`
-        );
+        const alertMessage = `تنويه: لم يتم العثور على أي عبارات في ${timeStamp}`;
+        sendEmail('تنبيه عدم العثور على العبارات', alertMessage);
+        sendSMS(alertMessage);
+        makePhoneCall(alertMessage);
         lastStatus = 'not_found';
       }
     }
   } catch (error) {
-    console.error('Error loading the page:', error.message);
+    console.error('Error during check:', error.message);
+    lastFullResponse = `Error: ${error.message}`;
+    const alertMessage = `تنويه: خطأ في الفحص في ${new Date().toLocaleString()} - ${error.message}`;
+    sendEmail('تنبيه خطأ في الفحص', alertMessage);
+    sendSMS(alertMessage);
+    makePhoneCall(alertMessage);
+    lastStatus = 'server_down';
+  } finally {
+    if (browser) await browser.close().catch(err => console.error('Error closing browser:', err));
+    isChecking = false;
   }
-
-  await browser.close();
 }
 
-// Immediately check the website on startup and then every 30 seconds
-checkWebsite();
-setInterval(checkWebsite, 30 * 1000);
+// Start checks with 45-second interval
+setInterval(checkWebsite, 45 * 1000);
+checkWebsite(); // Initial check
 
-// --- Express Server for Updating the Search Word ---
-
+// --- Express Server ---
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// Home page: Display current search word and a form to update it with Bootstrap styling.
 app.get('/', (req, res) => {
+  const phrasesText = phrasesToFind.join('\n');
   res.send(`
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="ar">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-      <title>Website Monitor Configuration</title>
+      <title>مراقبة الموقع</title>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-      <style>
-        body {
-          background-color: #f8f9fa;
-          padding-top: 50px;
-        }
-        .container {
-          max-width: 600px;
-        }
-        .card {
-          margin-top: 20px;
-        }
-      </style>
+      <style>pre { background: #eee; padding: 15px; }</style>
     </head>
-    <body>
-      <div class="container">
-        <h1 class="text-center">Website Monitor Configuration</h1>
-        <div class="card">
-          <div class="card-body">
-            <p class="card-text">
-              <strong>Current search word:</strong> <span id="currentWord">${wordToFind}</span>
-            </p>
-            <form method="POST" action="/update">
-              <div class="mb-3">
-                <label for="word" class="form-label">Enter new search word/phrase:</label>
-                <input type="text" class="form-control" id="word" name="word" value="${wordToFind}" required>
-              </div>
-              <button type="submit" class="btn btn-primary w-100">Update Search Word</button>
-            </form>
-          </div>
+    <body class="container mt-4">
+      <h1 class="mb-4">مراقبة الموقع</h1>
+      <div class="card mb-4">
+        <div class="card-body">
+          <form method="POST" action="/update">
+            <textarea class="form-control mb-3" name="phrases" rows="8">${phrasesText}</textarea>
+            <button type="submit" class="btn btn-primary w-100">تحديث العبارات</button>
+          </form>
         </div>
       </div>
-      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+      <div class="card">
+        <div class="card-body">
+          <pre>${lastFullResponse}</pre>
+        </div>
+      </div>
     </body>
     </html>
   `);
 });
 
-// Update the search word from the form submission.
 app.post('/update', (req, res) => {
-  if (req.body.word) {
-    wordToFind = req.body.word.trim();
-    console.log('Updated search word:', wordToFind);
+  if (req.body.phrases) {
+    phrasesToFind = req.body.phrases
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line);
+    storePhrases(phrasesToFind);
   }
   res.redirect('/');
 });
 
-// Start the Express server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Configuration server is running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
