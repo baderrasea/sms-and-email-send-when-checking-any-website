@@ -1,4 +1,13 @@
 {
+  "name": "codes",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "install-playwright": "npx playwright install --with-deps",
+    "test": "npx playwright test"
+  },
   "dependencies": {
     "@playwright/test": "^1.51.1",
     "axios": "^1.8.4",
@@ -8,15 +17,12 @@
     "selenium-webdriver": "^4.29.0",
     "twilio": "^5.5.1"
   },
-  "name": "codes",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "postinstall": "npx playwright install --with-deps"
 }
-
