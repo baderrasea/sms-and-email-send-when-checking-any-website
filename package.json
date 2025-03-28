@@ -4,12 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "install-playwright": "npx playwright install --with-deps",
-    "test": "npx playwright test"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@playwright/test": "^1.51.1",
+    "puppeteer": "^20.8.1",
     "axios": "^1.8.4",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",
@@ -20,9 +18,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
-  },
-  "postinstall": "npx playwright install --with-deps"
+  }
 }

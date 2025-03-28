@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { firefox } = require('@playwright/test');
+const puppeteer = require('puppeteer');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
@@ -13,7 +13,7 @@ const defaultPhrases = [
   "Le server est occupé",
   "El servidor está saturado",
   "Сервер перегружен",
-  "El servidor está ocupado",
+  "El servidor está ocupado"
 ];
 
 function getStoredPhrases() {
@@ -47,8 +47,8 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'badraldeenrasea@gmail.com',
-    pass: 'lenp ozew pevq cmey',
-  },
+    pass: 'lenp ozew pevq cmey'
+  }
 });
 
 const accountSid = 'ACe49c9576b39f7bed379e3df12948bbd2';
@@ -62,7 +62,7 @@ function sendEmail(subject, message) {
     from: 'baderrasaa8@gmail.com',
     to: 'kidsundkinder@gmail.com, baderrasaa8@gmail.com',
     subject,
-    text: message,
+    text: message
   };
 
   transporter.sendMail(mailOptions, (error) => {
@@ -76,7 +76,7 @@ function sendSMS(messageText) {
     .create({
       body: messageText,
       from: twilioPhoneNumber,
-      to: yourPhoneNumber,
+      to: yourPhoneNumber
     })
     .catch(error => console.error('Error sending SMS:', error));
 }
@@ -86,7 +86,7 @@ function makePhoneCall(messageText) {
     .create({
       twiml: `<Response><Say voice="alice">${messageText}</Say></Response>`,
       to: yourPhoneNumber,
-      from: twilioPhoneNumber,
+      from: twilioPhoneNumber
     })
     .catch(error => console.error('Error initiating call:', error));
 }
@@ -98,10 +98,9 @@ async function checkWebsite() {
     return;
   }
   isChecking = true;
-
   let browser;
   try {
-    browser = await firefox.launch({
+    browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
@@ -146,7 +145,9 @@ async function checkWebsite() {
     makePhoneCall(alertMessage);
     lastStatus = 'server_down';
   } finally {
-    if (browser) await browser.close().catch(err => console.error('Error closing browser:', err));
+    if (browser) {
+      await browser.close().catch(err => console.error('Error closing browser:', err));
+    }
     isChecking = false;
   }
 }
