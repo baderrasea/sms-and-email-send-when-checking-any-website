@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node index.js"
   },
+    "packageManager": "npm@9.8.1",
+
   "dependencies": {
     "puppeteer": "^20.8.1",
     "puppeteer-extra": "^3.3.4",
