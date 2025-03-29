@@ -1,9 +1,13 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+
+// Add stealth plugin to Puppeteer
+puppeteer.use(StealthPlugin());
 
 // --- Persistent Storage Setup ---
 const storageFilePath = path.join(__dirname, 'searchPhrases.json');
@@ -103,8 +107,14 @@ async function checkWebsite() {
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
+      // To try experimental firefox support uncomment the line below (requires additional setup):
+      // , product: 'firefox'
     });
     const page = await browser.newPage();
+
+    // Set user agent to mimic Firefox
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0");
+
     const timeStamp = new Date().toLocaleString();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
